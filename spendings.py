@@ -21,7 +21,7 @@ def hash_password(p):
     return hashlib.sha256(p.encode()).hexdigest()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)
 
 # In-memory database
 DB = {
@@ -37,6 +37,10 @@ from functools import wraps
 from flask import session
 
 app.secret_key = os.getenv("APP_SECRET", "change-this-secret")
+app.config.update(
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SECURE=True
+)
 APP_PASSWORD = os.getenv("SPENDLENS_PASSWORD", "family123")
 
 # ── In-memory store (persists while server runs) ──────────────────────────────
@@ -1389,7 +1393,7 @@ python auto_report.py</pre>
 <div class="toasts" id="toasts"></div>
 
 <script>
-const API = "/api";
+const API = window.location.origin + "/api";
 let allTransactions = [];
 let analytics = null;
 let categories = [];
@@ -1411,7 +1415,7 @@ async function verifyFamily(){
   const code = document.getElementById("familyCode").value;
 
   const r = await fetch("/api/verify-family",{
-    method:"POST",
+    method:"POST",credentials:"include",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({code})
   });
@@ -1457,7 +1461,7 @@ async function forgotPassword(){
   const code = prompt("Enter family code");
 
   const r = await fetch("/api/reset-password",{
-    method:"POST",
+    method:"POST",credentials:"include",
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
         username:username,
@@ -1719,7 +1723,7 @@ async function sendReport() {
   btn.disabled = true; btn.textContent = "Sending…";
   try {
     const r = await fetch(`${API}/send-report`, {
-      method: "POST", headers: {"Content-Type":"application/json"},
+      method: "POST",credentials:"include", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ email:to, sender_email:from, gmail_app_password:pass, period:"Full Statement" })
     });
     const d = await r.json();
@@ -1739,6 +1743,7 @@ async function login(){
   const password = document.getElementById("loginPassword").value;
 
   const r = await fetch("/api/login",{
+    credentials:"include",
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({username,password})
@@ -1773,7 +1778,7 @@ async function createAccount(){
   }
 
   const r = await fetch("/api/create-user",{
-      method:"POST",
+      method:"POST",credentials:"include",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({username,password})
   });
