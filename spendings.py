@@ -23,6 +23,9 @@ def hash_password(p):
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 # In-memory database
 DB = {
     "transactions": [],
@@ -41,6 +44,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="None",
     SESSION_COOKIE_SECURE=True
 )
+app.config["SESSION_COOKIE_DOMAIN"] = None
 APP_PASSWORD = os.getenv("SPENDLENS_PASSWORD", "family123")
 
 # ── In-memory store (persists while server runs) ──────────────────────────────
