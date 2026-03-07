@@ -42,7 +42,8 @@ APP_PASSWORD = os.getenv("SPENDLENS_PASSWORD", "family123")
 # ── In-memory store (persists while server runs) ──────────────────────────────
 import sqlite3
 
-DB_FILE = "spendlens.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, "spendlens.db")
 
 def db():
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
@@ -153,7 +154,8 @@ def create_user():
             (username,password)
         )
         conn.commit()
-    except:
+    except sqlite3.IntegrityError:
+        conn.close()
         return jsonify({"error":"User exists"}), 400
 
     conn.close()
