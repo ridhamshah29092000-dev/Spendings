@@ -1820,10 +1820,11 @@ async function createAccount(){
 def serve_frontend():
     return FRONTEND_HTML, 200, {"Content-Type": "text/html; charset=utf-8"}
 
-
+init_db()
 if __name__ == "__main__":
-    #init_db()
+    
     print("\n🚀 SpendLens running at http://localhost:5000")
     print("   Open this in your browser: http://localhost:5000\n")
 
     app.run(host="0.0.0.0", port=5000, debug=False)
+
