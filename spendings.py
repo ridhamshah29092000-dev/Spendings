@@ -1822,7 +1822,8 @@ def serve_frontend():
 
 
 if __name__ == "__main__":
-    init_db()
+    #init_db()
     print("\n🚀 SpendLens running at http://localhost:5000")
     print("   Open this in your browser: http://localhost:5000\n")
+
     app.run(host="0.0.0.0", port=5000, debug=False)
