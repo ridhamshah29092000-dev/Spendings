@@ -45,7 +45,7 @@ import sqlite3
 DB_FILE = "spendlens.db"
 
 def db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -94,6 +94,9 @@ def verify_family():
 @app.route("/api/login", methods=["POST"])
 def login():
 
+    if not session.get("family_ok"):
+     return jsonify({"error":"Family access required"}),403
+
     data = request.json or {}
     username = data.get("username")
     password = data.get("password")
@@ -115,6 +118,20 @@ def login():
         return jsonify({"ok":True})
 
     return jsonify({"error":"Invalid login"}), 401
+
+@app.route("/api/me")
+def me():
+
+    return jsonify({
+        "logged_in": bool(session.get("user_id")),
+        "family_ok": bool(session.get("family_ok")),
+        "username": session.get("username")
+    })
+
+@app.route("/api/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"ok":True})
 
 
 @app.route("/api/create-user", methods=["POST"])
@@ -139,6 +156,39 @@ def create_user():
     except:
         return jsonify({"error":"User exists"}), 400
 
+    conn.close()
+
+    return jsonify({"ok":True})
+
+@app.route("/api/reset-password", methods=["POST"])
+def reset_password():
+
+    data = request.json or {}
+
+    username = data.get("username")
+    new_password = data.get("password")
+    code = data.get("family_code")
+
+    if code != FAMILY_CODE:
+        return jsonify({"error":"Invalid family code"}),401
+
+    conn = db()
+
+    user = conn.execute(
+        "SELECT * FROM users WHERE username=?",
+        (username,)
+    ).fetchone()
+
+    if not user:
+        conn.close()
+        return jsonify({"error":"User not found"}),404
+
+    conn.execute(
+        "UPDATE users SET password_hash=? WHERE username=?",
+        (hash_password(new_password), username)
+    )
+
+    conn.commit()
     conn.close()
 
     return jsonify({"ok":True})
@@ -611,6 +661,10 @@ def health():
     conn.close()
     return jsonify({"status": "ok", "transactions": count})
 
+@app.route("/api/reset-session")
+def reset_session():
+    session.clear()
+    return jsonify({"ok":True})
 
 @app.route("/api/upload/file", methods=["POST"])
 @auth_required
@@ -703,7 +757,7 @@ def upload_sms():
             conn.close()
             existing_ids.add(t["id"])
             added += 1
-    return jsonify({"added": added, "total": len(DB["transactions"])})
+    return jsonify({"added": added})
 
 
 @app.route("/api/upload/manual", methods=["POST"])
@@ -717,9 +771,16 @@ def upload_manual():
     t["source"]   = "manual"
     t["balance"]  = 0
     t["id"]       = make_id(t)
-    existing = {x["id"] for x in DB["transactions"]}
-    if t["id"] in existing:
-        return jsonify({"error": "Duplicate"}), 409
+    conn = db()
+
+    exists = conn.execute(
+    "SELECT 1 FROM transactions WHERE id=?",
+    (t["id"],)
+    ).fetchone()
+
+    if exists:
+     return jsonify({"error":"Duplicate"}),409
+  
     conn = db()
 
     conn.execute("""
@@ -740,7 +801,7 @@ def upload_manual():
 
     conn.commit()
     conn.close()
-    return jsonify({"added": 1, "total": len(DB["transactions"])})
+    return jsonify({"added": 1})
 
 
 @app.route("/api/transactions")
@@ -834,6 +895,7 @@ def settings():
 
 
 @app.route("/api/send-report", methods=["POST"])
+@auth_required
 def send_report():
     data     = request.json or {}
     to_email = data.get("email") or DB["settings"]["email"]
@@ -864,6 +926,7 @@ def send_report():
 
 
 @app.route("/api/preview-report", methods=["GET"])
+@auth_required
 def preview_report():
     conn = db()
     rows = conn.execute("SELECT * FROM transactions WHERE user_id=?", (session["user_id"],)).fetchall()
@@ -1096,29 +1159,52 @@ class="input" style="margin-bottom:10px">
 <input id="loginPassword" type="password" placeholder="Password"
 class="input" style="margin-bottom:14px">
 
-<div id="signupBox" style="display:none;margin-top:16px">
+<button class="btn btn-primary" onclick="login()" style="width:100%;margin-bottom:10px">
+Login
+</button>
 
-<div style="color:#6ee7b7;margin-bottom:8px;font-size:13px">
-Create New Account
+<button class="btn btn-ghost" onclick="forgotPassword()" style="width:100%;margin-top:6px">
+Forgot Password
+</button>
+
+<button class="btn btn-ghost" onclick="openSignup()" style="width:100%">
+Create Account
+</button>
+
 </div>
+
+</div>
+
+
+<div id="signupScreen" style="
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:#070b12;
+display:none;
+align-items:center;
+justify-content:center;
+z-index:9999;
+">
+
+<div style="background:#111827;padding:40px;border-radius:14px;width:320px;text-align:center">
+
+<h2 style="margin-bottom:20px;color:#6ee7b7">CREATE ACCOUNT</h2>
 
 <input id="signupUser" type="text" placeholder="Username"
 class="input" style="margin-bottom:10px">
 
 <input id="signupPass" type="password" placeholder="Password"
-class="input" style="margin-bottom:10px">
+class="input" style="margin-bottom:14px">
 
-<button class="btn btn-primary" onclick="createAccount()" style="width:100%">
+<button class="btn btn-primary" onclick="createAccount()" style="width:100%;margin-bottom:10px">
 Create Account
 </button>
 
-</div>
-<button class="btn btn-primary" onclick="login()" style="width:100%;margin-bottom:10px">
-Login
-</button>
-
-<button class="btn btn-ghost" onclick="showSignup()" style="width:100%">
-Create Account
+<button class="btn btn-ghost" onclick="backToLogin()" style="width:100%">
+Back to Login
 </button>
 
 </div>
@@ -1329,9 +1415,14 @@ async function verifyFamily(){
   });
 
   if(r.status===200){
+
       document.getElementById("familyGate").style.display="none";
+      document.getElementById("loginScreen").style.display="flex";
+
   }else{
+
       alert("Wrong family code");
+
   }
 
 }
@@ -1351,6 +1442,36 @@ async function checkHealth() {
     document.getElementById("offlineBanner").style.display = "block";
     return false;
   }
+}
+
+async function forgotPassword(){
+
+  const username = prompt("Enter your username");
+  if(!username) return;
+
+  const newpass = prompt("Enter new password");
+  if(!newpass) return;
+
+  const code = prompt("Enter family code");
+
+  const r = await fetch("/api/reset-password",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+        username:username,
+        password:newpass,
+        family_code:code
+    })
+  });
+
+  const d = await r.json();
+
+  if(d.ok){
+      alert("Password reset successful. Please login.");
+  }else{
+      alert(d.error || "Failed");
+  }
+
 }
 
 // ── Fetch all data ────────────────────────────────────────────────────────────
@@ -1629,16 +1750,14 @@ async function login(){
   }
 }
 
-function showSignup(){
+function openSignup(){
+  document.getElementById("loginScreen").style.display="none";
+  document.getElementById("signupScreen").style.display="flex";
+}
 
-  const box = document.getElementById("signupBox");
-
-  if(box.style.display==="none"){
-      box.style.display="block";
-  }else{
-      box.style.display="none";
-  }
-
+function backToLogin(){
+  document.getElementById("signupScreen").style.display="none";
+  document.getElementById("loginScreen").style.display="flex";
 }
 
 async function createAccount(){
@@ -1661,7 +1780,7 @@ async function createAccount(){
 
   if(d.ok){
       alert("Account created! Now login.");
-      document.getElementById("signupBox").style.display="none";
+      backToLogin();
   }else{
       alert(d.error || "Failed");
   }
@@ -1670,8 +1789,16 @@ async function createAccount(){
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async function init() {
+
   await checkHealth();
+
+  await fetch("/api/reset-session");
+
+  document.getElementById("familyGate").style.display="flex";
+  document.getElementById("loginScreen").style.display="none";
+
   setInterval(checkHealth, 10000);
+
 })();
 </script>
 </body>
