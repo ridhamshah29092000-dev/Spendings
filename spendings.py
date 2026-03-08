@@ -971,6 +971,9 @@ def get_categories():
 FRONTEND_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#070b12">
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>SpendLens · Bank Analytics</title>
@@ -1404,6 +1407,13 @@ let categories = [];
 let areaChartInst = null;
 let donutChartInst = null;
 
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(() => console.log("Service worker registered"));
+}
+
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function toast(msg, type = "info") {
   const el = document.createElement("div");
@@ -1816,15 +1826,45 @@ async function createAccount(){
 </html>
 """
 
+@app.route("/manifest.json")
+def manifest():
+    return {
+        "name": "SpendLens",
+        "short_name": "SpendLens",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#070b12",
+        "theme_color": "#070b12",
+        "icons": [
+            {
+                "src": "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                "sizes": "512x512",
+                "type": "image/png"
+            }
+        ]
+    }
+
+@app.route("/service-worker.js")
+def service_worker():
+    js = """
+self.addEventListener('install', e => {
+    self.skipWaiting();
+});
+
+self.addEventListener('fetch', event => {
+    event.respondWith(fetch(event.request));
+});
+"""
+    return js, 200, {"Content-Type": "application/javascript"}
+
 @app.route("/")
 def serve_frontend():
     return FRONTEND_HTML, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 init_db()
+
 if __name__ == "__main__":
     
     print("\n🚀 SpendLens running at http://localhost:5000")
     print("   Open this in your browser: http://localhost:5000\n")
-
     app.run(host="0.0.0.0", port=5000, debug=False)
-
