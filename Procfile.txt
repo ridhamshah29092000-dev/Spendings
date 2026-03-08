@@ -1,1 +1,1 @@
-web: gunicorn spendings:app
+web: gunicorn spendings_2:app
