@@ -5,4 +5,5 @@ openpyxl
 gunicorn
 reportlab
 werkzeug
+weasyprint
 psycopg2-binary

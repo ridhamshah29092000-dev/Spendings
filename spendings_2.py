@@ -724,56 +724,35 @@ def download_report():
     html = build_email_html(analytics_data, sorted(txns, key=lambda x: x["date"], reverse=True), "SpendLens Report")
     return Response(html, headers={"Content-Type": "text/html", "Content-Disposition": "attachment; filename=spendlens_report.html"})
 
+from weasyprint import HTML
+from flask import send_file
+
 @app.route("/api/download-report-pdf")
 @auth_required
 def download_report_pdf():
+
     conn = db()
     cur = cursor(conn)
     cur.execute("SELECT * FROM transactions WHERE user_id=%s", (session["user_id"],))
     txns = [dict(r) for r in cur.fetchall()]
     cur.close()
     conn.close()
+
     analytics_data = compute_analytics(txns)
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-    y = height - 50
-    pdf.setFont("Helvetica-Bold", 22)
-    pdf.drawString(50, y, "SpendLens Report")
-    y -= 40
-    pdf.setFont("Helvetica", 12)
-    pdf.drawString(50, y, f"Total Spent: Rs.{analytics_data['total_debit']}")
-    y -= 20
-    pdf.drawString(50, y, f"Total Received: Rs.{analytics_data['total_credit']}")
-    y -= 20
-    pdf.drawString(50, y, f"Average Daily Spend: Rs.{analytics_data['avg_daily']}")
-    y -= 40
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(50, y, "Top Categories")
-    y -= 20
-    pdf.setFont("Helvetica", 11)
-    for cat, data in analytics_data["categories"].items():
-        pdf.drawString(60, y, f"{cat}: Rs.{data['total']}")
-        y -= 18
-        if y < 100:
-            pdf.showPage()
-            y = height - 50
-    y -= 20
-    pdf.setFont("Helvetica-Bold", 14)
-    pdf.drawString(50, y, "Recent Transactions")
-    y -= 20
-    pdf.setFont("Helvetica", 10)
-    for t in txns[:20]:
-        line = f"{t['date']} | {t['description'][:30]} | Rs.{abs(t['amount'])}"
-        pdf.drawString(50, y, line)
-        y -= 16
-        if y < 100:
-            pdf.showPage()
-            y = height - 50
-    pdf.save()
-    buffer.seek(0)
-    return Response(buffer, mimetype="application/pdf",
-                    headers={"Content-Disposition": "attachment; filename=spendlens_report.pdf"})
+
+    html = build_email_html(
+        analytics_data,
+        sorted(txns, key=lambda x: x["date"], reverse=True),
+        "SpendLens Report"
+    )
+
+    pdf_bytes = HTML(string=html).write_pdf()
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition":"attachment; filename=spendlens_report.pdf"}
+    )
 
 @app.route("/api/preview-report")
 @auth_required
@@ -810,7 +789,7 @@ FRONTEND_HTML = """<!DOCTYPE html>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#070b12">
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>SpendLens · Bank Analytics</title>
@@ -823,8 +802,15 @@ FRONTEND_HTML = """<!DOCTYPE html>
   --accent:#6ee7b7;--red:#f87171;--green:#34d399;--muted:#4b5563;
   --text:#e5e7eb;--sub:#6b7280;
 }
-html,body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;
-  overflow-x:hidden;max-width:100%}
+html,body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'DM Mono',monospace;
+  min-height:100vh;
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:var(--surface)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
@@ -850,22 +836,47 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace
 
 /* ── Bottom Nav (Mobile) ── */
 .bottom-nav{
-  position:fixed;bottom:0;left:0;width:100%;
-  background:var(--surface);border-top:1px solid var(--border);
-  display:none;justify-content:space-around;align-items:center;
-  height:64px;z-index:300;padding-bottom:env(safe-area-inset-bottom,0px);
+  position:fixed;
+  bottom:0;
+  left:0;
+  width:100%;
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  display:none;
+  justify-content:space-around;
+  align-items:center;
+  height:72px;   /* bigger tap area */
+  z-index:300;
+  padding-bottom:env(safe-area-inset-bottom,0px);
 }
 .bottom-nav button{
-  background:none;border:none;color:var(--sub);font-size:22px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;width:25%;height:100%;cursor:pointer;transition:color .15s;
+  background:none;
+  border:none;
+  color:var(--sub);
+  font-size:28px;   /* bigger icons */
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  width:25%;
+  height:100%;
+  cursor:pointer;
+  transition:color .15s;
 }
-.bottom-nav button span{font-size:10px;font-family:'DM Mono',monospace}
+.bottom-nav button span{
+  font-size:11px;
+  font-family:'DM Mono',monospace;
+}
 .bottom-nav button.active{color:var(--accent)}
 @media(max-width:700px){.bottom-nav{display:flex}}
 
 /* ── Content ── */
-.content{max-width:1100px;margin:0 auto;padding:24px 20px}
+.content{
+  max-width:1100px;
+  margin:0 auto;
+  padding:16px;
+}
 @media(max-width:700px){
   .content{padding:16px 14px;padding-bottom:80px}
 }
@@ -916,8 +927,18 @@ select.input option{background:var(--card)}
 .dropzone-icon{font-size:36px;margin-bottom:10px}
 
 /* ── Table ── */
-.table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--border);-webkit-overflow-scrolling:touch}
-table{width:100%;border-collapse:collapse;font-size:13px;min-width:500px}
+.table-wrap{
+  overflow-x:auto;
+  border-radius:14px;
+  border:1px solid var(--border);
+  -webkit-overflow-scrolling:touch;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+  min-width:420px;
+}
 thead tr{background:var(--surface);border-bottom:1px solid var(--border)}
 th{padding:11px 14px;text-align:left;color:var(--sub);font-weight:500;
    font-size:10px;letter-spacing:2px;white-space:nowrap}
@@ -1553,7 +1574,7 @@ function renderTransactions() {
       const cc    = CAT_COLORS_MAP[t.category]||"#888";
       return `<tr>
         <td style="color:var(--sub);font-family:monospace;white-space:nowrap;font-size:12px">${t.date}</td>
-        <td style="max-width:200px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${t.description}</div></td>
+        <td style="max-width:200px"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${t.description.substring(0,20)}</div></td>
         <td><span class="pill" style="background:${cc}22;color:${cc}">${t.category}</span></td>
         <td><span style="font-size:10px;color:var(--sub);background:var(--surface);padding:2px 7px;border-radius:4px">${t.source}</span></td>
         <td style="text-align:right;font-family:monospace;font-weight:700;color:${color};white-space:nowrap;font-size:12px">${sign}${fmt(t.amount)}</td>
