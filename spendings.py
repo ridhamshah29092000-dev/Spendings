@@ -1349,22 +1349,61 @@ Back to Login
   ⚠️ Backend not reachable. Make sure <code>python app.py</code> is running in a separate PowerShell window.
 </div>
 
-<div class="tabs">
 
-<!-- ── DASHBOARD TAB ───────────────────────────────────────────────── -->
-<div class="content" id="page-dashboard">
-  <div id="dashEmpty" class="empty-state">No data yet — go to <strong>Import Data</strong> to upload your bank statement.</div>
-  <div id="dashContent" style="display:none">
-    <div class="stats-grid" id="statsGrid"></div>
-    <div class="charts-grid">
-      <div class="card"><div class="label">Daily Spend — Last 30 Days</div><canvas id="areaChart" height="200"></canvas></div>
-      <div class="card"><div class="label">By Category</div><canvas id="donutChart" height="200"></canvas></div>
-    </div>
-    <div class="charts-grid2">
-      <div class="card" id="catBreakdown"><div class="label">Category Breakdown</div></div>
-      <div class="card" id="merchantList"><div class="label">Top Merchants</div></div>
-    </div>
+
+<div class="tabs">
+  <div class="tabs-inner">
+
+    <button class="tab-btn active" id="tab-dashboard" onclick="showTab('dashboard')">
+      Dashboard
+    </button>
+
+    <button class="tab-btn" id="tab-import" onclick="showTab('import')">
+      Import Data
+    </button>
+
+    <button class="tab-btn" id="tab-transactions" onclick="showTab('transactions')">
+      Transactions
+    </button>
+
+    <button class="tab-btn" id="tab-email" onclick="showTab('email')">
+      Email
+    </button>
+
   </div>
+</div>
+
+<!-- ── DASHBOARD TAB ───────────────────────────────────────────── -->
+
+<div class="content" id="page-dashboard">
+
+  <div id="dashEmpty" class="empty-state">
+      No data yet. Import a bank statement or add transactions.
+  </div>
+
+  <div id="dashContent" style="display:none">
+
+    <div id="statsGrid" class="stats-grid"></div>
+
+    <div class="charts-grid">
+        <div class="card">
+            <div class="label">Daily Spend</div>
+            <canvas id="areaChart"></canvas>
+        </div>
+
+        <div class="card">
+            <div class="label">Categories</div>
+            <canvas id="donutChart"></canvas>
+        </div>
+    </div>
+
+    <div class="charts-grid2">
+        <div class="card" id="catBreakdown"></div>
+        <div class="card" id="merchantList"></div>
+    </div>
+
+  </div>
+
 </div>
 
 <!-- ── IMPORT TAB ─────────────────────────────────────────────────── -->
@@ -1927,6 +1966,7 @@ def manifest():
         "short_name": "SpendLens",
         "start_url": "/",
         "display": "standalone",
+        
         "background_color": "#070b12",
         "theme_color": "#070b12",
         "icons": [
