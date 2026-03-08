@@ -403,6 +403,47 @@ def compute_analytics(txns: list) -> dict:
         "avg_daily":     round(total_debit / max(len(daily), 1), 2),
     }
 
+
+import matplotlib.pyplot as plt
+import base64
+
+def generate_daily_chart(daily_data):
+
+    dates = list(daily_data.keys())
+    values = list(daily_data.values())
+
+    if not dates:
+        return ""
+
+    plt.figure(figsize=(10,3))
+    plt.plot(dates, values, color="#6ee7b7", linewidth=2)
+    plt.fill_between(dates, values, alpha=0.25)
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    buf = BytesIO()
+    plt.savefig(buf, format="png")
+    plt.close()
+
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
+
+    return img_base64
+
+
+def weekly_summary(txns):
+
+    weeks = defaultdict(float)
+
+    for t in txns:
+        if t["amount"] > 0:
+            d = datetime.fromisoformat(t["date"])
+            week = f"{d.year}-W{d.isocalendar()[1]}"
+            weeks[week] += t["amount"]
+
+    return sorted(weeks.items())
+
 # ── Email HTML builder ────────────────────────────────────────────────────────
 def build_email_html(analytics: dict, txns: list, period: str = "") -> str:
     cats  = analytics["categories"]
@@ -731,22 +772,70 @@ from flask import send_file
 @auth_required
 def download_report_pdf():
 
+    from_date = request.args.get("from")
+    to_date = request.args.get("to")
+
     conn = db()
     cur = cursor(conn)
-    cur.execute("SELECT * FROM transactions WHERE user_id=%s", (session["user_id"],))
+
+    query = "SELECT * FROM transactions WHERE user_id=%s"
+    params = [session["user_id"]]
+
+    if from_date and to_date:
+        query += " AND date BETWEEN %s AND %s"
+        params.extend([from_date, to_date])
+
+    cur.execute(query, params)
+
     txns = [dict(r) for r in cur.fetchall()]
+
     cur.close()
     conn.close()
 
     analytics_data = compute_analytics(txns)
 
-    html = build_email_html(
+    chart = generate_daily_chart(analytics_data["daily"])
+
+    weekly = weekly_summary(txns)
+
+    weekly_rows = "".join(
+        f"<tr><td>{w}</td><td>₹{v:,.0f}</td></tr>"
+        for w,v in weekly
+    )
+
+    base_html = build_email_html(
         analytics_data,
         sorted(txns, key=lambda x: x["date"], reverse=True),
         "SpendLens Report"
     )
 
-    pdf_bytes = HTML(string=html).write_pdf()
+    extra_pages = f"""
+    <div style="page-break-before:always"></div>
+
+    <h2 style="font-size:18px;margin-top:20px">Daily Spending Trend</h2>
+
+    <img src="data:image/png;base64,{chart}" style="width:100%;border-radius:10px"/>
+
+    <div style="page-break-before:always"></div>
+
+    <h2 style="font-size:18px;margin-top:20px">Weekly Summary</h2>
+
+    <table style="width:100%;border-collapse:collapse">
+        <thead>
+            <tr>
+                <th style="text-align:left;padding:8px">Week</th>
+                <th style="text-align:right;padding:8px">Total Spend</th>
+            </tr>
+        </thead>
+        <tbody>
+            {weekly_rows}
+        </tbody>
+    </table>
+    """
+
+    final_html = base_html.replace("</body>", extra_pages + "</body>")
+
+    pdf_bytes = HTML(string=final_html).write_pdf()
 
     return Response(
         pdf_bytes,
@@ -851,8 +940,9 @@ html,body{
   display:none;
   justify-content:space-around;
   align-items:center;
-  height:74px;
+  height:78px;
   z-index:300;
+  padding-top:8px;  
    padding-bottom: calc(env(safe-area-inset-bottom) + 4px);
 }
 .bottom-nav button{
@@ -864,15 +954,15 @@ html,body{
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:2px;
+  gap:3px;
   width:25%;
   height:100%;
-  padding-top:6px;
   cursor:pointer;
   transition:color .15s;
 }
 .bottom-nav button span{
-  font-size:11px;
+  font-size:12px;
+   margin-top:2px;
   font-family:'DM Mono',monospace;
 }
 .bottom-nav button.active{color:var(--accent)}
@@ -1232,6 +1322,17 @@ code{background:#1e293b;padding:2px 8px;border-radius:4px;
   <div style="max-width:480px;margin:auto">
     <div class="card">
       <div class="label">Generate Report</div>
+
+      <div class="form-grid">
+  <div>
+    <div class="label">From Date</div>
+    <input type="date" id="reportFrom" class="input">
+  </div>
+  <div>
+    <div class="label">To Date</div>
+    <input type="date" id="reportTo" class="input">
+  </div>
+</div>
       <p style="color:var(--sub);font-size:13px;margin-bottom:18px">
         Download or email your full spending report with analytics, categories and transactions.
       </p>
@@ -1625,12 +1726,24 @@ async function sendReport() {
 }
 
 async function downloadPDF() {
-  const r = await fetch("/api/download-report-pdf",{credentials:"include"});
+
+  const from = document.getElementById("reportFrom").value;
+  const to = document.getElementById("reportTo").value;
+
+  const r = await fetch(`/api/download-report-pdf?from=${from}&to=${to}`,{
+    credentials:"include"
+  });
+
   const blob = await r.blob();
+
   const url = window.URL.createObjectURL(blob);
+
   const a = document.createElement("a");
-  a.href=url; a.download="spendlens_report.pdf";
-  document.body.appendChild(a); a.click(); a.remove();
+
+  a.href = url;
+  a.download = "spendlens_report.pdf";
+
+  a.click();
 }
 
 async function previewReport() {

@@ -6,4 +6,5 @@ gunicorn
 reportlab
 werkzeug
 weasyprint
+matplotlib
 psycopg2-binary
