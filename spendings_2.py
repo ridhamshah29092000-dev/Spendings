@@ -851,7 +851,7 @@ html,body{
   display:none;
   justify-content:space-around;
   align-items:center;
-  height:72px;   /* bigger tap area */
+  height:74px;
   z-index:300;
    padding-bottom: calc(env(safe-area-inset-bottom) + 4px);
 }
@@ -859,14 +859,15 @@ html,body{
   background:none;
   border:none;
   color:var(--sub);
-  font-size:28px;   /* bigger icons */
+  font-size:26px;
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:4px;
+  gap:2px;
   width:25%;
   height:100%;
+  padding-top:6px;
   cursor:pointer;
   transition:color .15s;
 }
