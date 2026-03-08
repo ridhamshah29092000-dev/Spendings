@@ -1048,36 +1048,36 @@ FRONTEND_HTML = """<!DOCTYPE html>
 
 
   .bottom-nav{
-position:fixed;
-bottom:0;
-left:0;
-width:100%;
-background:#0d1117;
-border-top:1px solid #1f2937;
-display:flex;
-justify-content:space-around;
-padding:10px 0;
-z-index:1000;
-}
+ position:fixed;
+ bottom:0;
+ left:0;
+ width:100%;
+ background:#0d1117;
+ border-top:1px solid #1f2937;
+ display:flex;
+ justify-content:space-around;
+ padding:10px 0;
+ z-index:1000;
+ }
 
-.bottom-nav button{
-background:none;
-border:none;
-color:#6b7280;
-font-size:12px;
-display:flex;
-flex-direction:column;
-align-items:center;
-gap:3px;
-}
+ .bottom-nav button{
+ background:none;
+ border:none;
+ color:#6b7280;
+ font-size:12px;
+ display:flex;
+ flex-direction:column;
+ align-items:center;
+ gap:3px;
+ }
 
-.bottom-nav button.active{
-color:#6ee7b7;
-}
+ .bottom-nav button.active{
+ color:#6ee7b7;
+ }
 
-.content{
-padding-bottom:90px;
-}
+ .content{
+ padding-bottom:90px;
+ }
 
 
   /* Cards */
@@ -1095,6 +1095,14 @@ padding-bottom:90px;
   .charts-grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
   @media(max-width:700px){.charts-grid,.charts-grid2{grid-template-columns:1fr}}
 
+
+  @media (max-width:700px){
+
+ .tabs{
+ display:none;
+ }
+
+ }
   /* Buttons */
   .btn{padding:padding:12px 18px;min-height:42px;border-radius:8px;border:none;cursor:pointer;font-family:'DM Mono',monospace;
     font-size:13px;font-weight:700;letter-spacing:1px;transition:all .15s}
@@ -1957,6 +1965,31 @@ async function createAccount(){
 
 })();
 </script>
+
+<div class="bottom-nav">
+
+<button onclick="showTab('dashboard')">
+🏠
+<span>Home</span>
+</button>
+
+<button onclick="showTab('import')">
+➕
+<span>Add</span>
+</button>
+
+<button onclick="showTab('transactions')">
+📜
+<span>History</span>
+</button>
+
+<button onclick="showTab('email')">
+📧
+<span>Reports</span>
+</button>
+
+</div>
+
 </body>
 </html>
 """
