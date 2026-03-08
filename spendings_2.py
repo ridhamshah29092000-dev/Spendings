@@ -795,6 +795,12 @@ FRONTEND_HTML = """<!DOCTYPE html>
 <title>SpendLens · Bank Analytics</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
+
+body{
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -847,7 +853,7 @@ html,body{
   align-items:center;
   height:72px;   /* bigger tap area */
   z-index:300;
-  padding-bottom:env(safe-area-inset-bottom,0px);
+   padding-bottom: calc(env(safe-area-inset-bottom) + 4px);
 }
 .bottom-nav button{
   background:none;
@@ -1276,6 +1282,16 @@ let categories = [];
 let areaChartInst = null;
 let donutChartInst = null;
 
+let lastActive = Date.now();
+
+function updateActivity(){
+  lastActive = Date.now();
+}
+
+document.addEventListener("click", updateActivity);
+document.addEventListener("touchstart", updateActivity);
+document.addEventListener("keydown", updateActivity);
+
 // ── Toast ──────────────────────────────────────────────────────────────────
 function toast(msg, type="info") {
   const el = document.createElement("div");
@@ -1665,6 +1681,17 @@ async function init() {
   }
   setInterval(checkHealth, 15000);
 }
+
+setInterval(async ()=>{
+  const inactive = Date.now() - lastActive;
+
+  if(inactive > 10 * 60 * 1000){ // 10 minutes
+    const r = await fetch("/api/logout",{method:"POST",credentials:"include"});
+    document.getElementById("loginScreen").style.display="flex";
+    toast("Session locked. Please login again.","info");
+  }
+},60000);
+
 
 window.onload = init;
 </script>
