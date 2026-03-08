@@ -3,3 +3,6 @@ flask-cors
 pandas
 openpyxl
 gunicorn
+reportlab
+werkzeug
+psycopg2-binary
