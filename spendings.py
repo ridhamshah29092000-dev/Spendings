@@ -893,15 +893,40 @@ def get_analytics():
     return jsonify(compute_analytics(txns))
 
 
-@app.route("/api/settings", methods=["GET", "POST"])
+@app.route("/api/settings", methods=["GET","POST"])
 def settings():
+
+    conn = db()
+
     if request.method == "POST":
+
         data = request.json or {}
-        DB["settings"].update(data)
-        return jsonify({"ok": True})
-    # Don't expose password
-    safe = {k: ("****" if "password" in k else v) for k, v in DB["settings"].items()}
-    return jsonify(safe)
+
+        conn.execute("""
+        INSERT OR REPLACE INTO settings
+        (id,email,sender_email,gmail_app_password)
+        VALUES (1,?,?,?)
+        """,(
+            data.get("email"),
+            data.get("sender_email"),
+            data.get("gmail_app_password")
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"ok":True})
+
+    row = conn.execute(
+        "SELECT email,sender_email FROM settings WHERE id=1"
+    ).fetchone()
+
+    conn.close()
+
+    if not row:
+        return jsonify({})
+
+    return jsonify(dict(row))
 
 
 @app.route("/api/send-report", methods=["POST"])
@@ -916,7 +941,17 @@ def send_report():
     if not all([to_email, sender, password]):
         return jsonify({"error": "Email credentials not configured"}), 400
 
-    txns     = DB["transactions"]
+    conn = db()
+
+    rows = conn.execute(
+    "SELECT * FROM transactions WHERE user_id=?",
+    (session["user_id"],)
+      ).fetchall()
+
+    conn.close()
+
+    txns = [dict(r) for r in rows]
+
     analytics = compute_analytics(txns)
     html     = build_email_html(analytics, sorted(txns, key=lambda x: x["date"], reverse=True), period)
 
@@ -975,7 +1010,7 @@ FRONTEND_HTML = """<!DOCTYPE html>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#070b12">
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SpendLens · Bank Analytics</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -1009,6 +1044,40 @@ FRONTEND_HTML = """<!DOCTYPE html>
 
   .content{max-width:1100px;margin:0 auto;padding:28px 24px}
 
+
+  .bottom-nav{
+position:fixed;
+bottom:0;
+left:0;
+width:100%;
+background:#0d1117;
+border-top:1px solid #1f2937;
+display:flex;
+justify-content:space-around;
+padding:10px 0;
+z-index:1000;
+}
+
+.bottom-nav button{
+background:none;
+border:none;
+color:#6b7280;
+font-size:12px;
+display:flex;
+flex-direction:column;
+align-items:center;
+gap:3px;
+}
+
+.bottom-nav button.active{
+color:#6ee7b7;
+}
+
+.content{
+padding-bottom:90px;
+}
+
+
   /* Cards */
   .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px}
   .label{font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
@@ -1025,7 +1094,7 @@ FRONTEND_HTML = """<!DOCTYPE html>
   @media(max-width:700px){.charts-grid,.charts-grid2{grid-template-columns:1fr}}
 
   /* Buttons */
-  .btn{padding:10px 22px;border-radius:8px;border:none;cursor:pointer;font-family:'DM Mono',monospace;
+  .btn{padding:padding:12px 18px;min-height:42px;border-radius:8px;border:none;cursor:pointer;font-family:'DM Mono',monospace;
     font-size:13px;font-weight:700;letter-spacing:1px;transition:all .15s}
   .btn-primary{background:var(--accent);color:#000}
   .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
@@ -1098,23 +1167,56 @@ body{
 }
 
 .content{
-  max-width:1000px;
+  width:100%;
+  max-width:900px;
   margin:auto;
+  padding:20px 16px;
 }
 
-@media (max-width:600px){
-  .content{
-    padding:18px 14px;
-  }
+@media (max-width:700px){
 
   .header-inner{
     flex-direction:column;
-    gap:10px;
+    align-items:flex-start;
+    gap:8px;
   }
 
   .logo{
     font-size:18px;
   }
+
+  .tabs-inner{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+
+  .tab-btn{
+    flex:0 0 auto;
+    padding:12px 16px;
+    font-size:12px;
+  }
+
+  .content{
+    padding:16px 12px;
+  }
+
+}
+
+
+@media(max-width:700px){
+
+  table{
+    font-size:12px;
+  }
+
+  th{
+    font-size:10px;
+  }
+
+  td{
+    padding:10px 10px;
+  }
+
 }
 
 </style>
@@ -1247,15 +1349,7 @@ Back to Login
   ⚠️ Backend not reachable. Make sure <code>python app.py</code> is running in a separate PowerShell window.
 </div>
 
-<!-- Tabs -->
 <div class="tabs">
-  <div class="tabs-inner">
-    <button class="tab-btn active" onclick="showTab('dashboard')" id="tab-dashboard">📊 Dashboard</button>
-    <button class="tab-btn" onclick="showTab('import')" id="tab-import">⬆️ Import Data</button>
-    <button class="tab-btn" onclick="showTab('transactions')" id="tab-transactions">📋 Transactions</button>
-    <button class="tab-btn" onclick="showTab('email')" id="tab-email">📧 Email Report</button>
-  </div>
-</div>
 
 <!-- ── DASHBOARD TAB ───────────────────────────────────────────────── -->
 <div class="content" id="page-dashboard">
@@ -1863,8 +1957,80 @@ def serve_frontend():
 
 init_db()
 
+import threading
+import time
+
+
+
+def weekly_report_job():
+
+    while True:
+
+        now = datetime.now()
+
+        # Sunday 8 AM
+        if now.weekday() == 6 and now.hour == 8 and now.minute == 0:
+
+            try:
+
+                conn = db()
+                users = conn.execute("SELECT * FROM users").fetchall()
+
+                for user in users:
+
+                    rows = conn.execute(
+                        "SELECT * FROM transactions WHERE user_id=?",
+                        (user["id"],)
+                    ).fetchall()
+
+                    txns = [dict(r) for r in rows]
+
+                    if not txns:
+                        continue
+
+                    analytics = compute_analytics(txns)
+
+                    html = build_email_html(
+                        analytics,
+                        sorted(txns, key=lambda x: x["date"], reverse=True),
+                        "Weekly Report"
+                    )
+
+                    s = conn.execute(
+                    "SELECT email,sender_email,gmail_app_password FROM settings WHERE id=1" 
+                    ).fetchone()
+
+                    if not s:
+                     continue
+
+                    to_email = s["email"]
+                    sender = s["sender_email"]
+                    password = s["gmail_app_password"]
+
+                    msg = MIMEMultipart("alternative")
+                    msg["Subject"] = "💳 Weekly SpendLens Report"
+                    msg["From"] = sender
+                    msg["To"] = to_email
+                    msg.attach(MIMEText(html, "html"))
+
+                    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+                        s.login(sender, password)
+                        s.sendmail(sender, to_email, msg.as_string())
+
+                conn.close()
+
+            except Exception as e:
+                print("Weekly email error:", e)
+
+            time.sleep(60)
+
+        time.sleep(20)
+
+
+
 if __name__ == "__main__":
     
     print("\n🚀 SpendLens running at http://localhost:5000")
     print("   Open this in your browser: http://localhost:5000\n")
+    threading.Thread(target=weekly_report_job, daemon=True).start()
     app.run(host="0.0.0.0", port=5000, debug=False)
